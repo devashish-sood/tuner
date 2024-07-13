@@ -1,6 +1,8 @@
+use std::borrow::Borrow;
+
 pub struct FixedSizeVec<T: Clone> {
   buf: Vec<T>, 
-  m_size: usize,
+  size: usize,
 }
 
 // Fixed size vector that pushes out old data on append
@@ -9,32 +11,45 @@ impl<T: Clone> FixedSizeVec<T> {
   pub fn new(size: usize) -> Self {
     Self {
       buf: Vec::with_capacity(size),
-      m_size: size
+      size,
     }
   }
 
   pub fn with_vec(size: usize, vec: &Vec<T>) -> Self {
+    assert!(size >= vec.len());
+    let mut buf = Vec::with_capacity(size);
+    buf.extend(vec.iter().cloned());
     Self {
-      buf: vec.clone(),
-      m_size: size
+      buf,
+      size: size
     }
   }
 
   pub fn extend<I>(&mut self, items: I)
-    where I: IntoIterator<Item=T> {
-      let items: Vec<T> = items.into_iter().collect();
-      let items_len= items.len();
+    where 
+    I: IntoIterator,
+    I::Item: Borrow<T>,
+    T: ToOwned<Owned = T> 
+    {
+      let mut iter = items.into_iter();
+      let mut count = self.len();
 
+      while !self.full() {
+        if let Some(i) = iter.next() {
+          self.buf.push(i.borrow().to_owned());
+          count += 1;
+        }
+        else {
+          return;
+        }
+      }
 
-      // Doesn't entirely handle cases where items_len > 2 * self.m_size, easy fix but it doesn't affect my use cases for now.
-      if items_len > self.m_size {
-        self.buf = items[items_len-self.m_size..].to_vec(); 
+      for i in iter {
+        self.buf[count % self.size] = i.borrow().clone();
+        count += 1;
       }
-      else {
-        let overflow = self.buf.len() + items_len - self.m_size;
-        self.buf.drain(0..overflow);
-        self.buf.extend(items);
-      }
+
+      self.buf.rotate_left(count % self.size);
     }
 
     pub fn as_slice(&self) -> &[T] {
@@ -51,7 +66,7 @@ impl<T: Clone> FixedSizeVec<T> {
     }
 
   pub fn full(&self) -> bool {
-    return self.len() == self.m_size;
+    return self.len() >= self.size;
   }
   }
 
@@ -64,7 +79,7 @@ impl<T: Clone> FixedSizeVec<T> {
       fn test_init_fixed_vec() {
         let vec = FixedSizeVec::<f32>::new(5);
         assert_eq!(vec.len(), 0);
-        assert_eq!(vec.m_size, 5);
+        assert_eq!(vec.size, 5);
       }
 
       #[test]
@@ -78,7 +93,7 @@ impl<T: Clone> FixedSizeVec<T> {
         let v = vec![1, 2, 3, 4, 5];
         let fs_v = FixedSizeVec::with_vec(10, &v);
         assert_eq!(v.len(), fs_v.len());
-        assert_eq!(fs_v.m_size, 10);
+        assert_eq!(fs_v.size, 10);
       }
 
       #[test]
@@ -97,5 +112,14 @@ impl<T: Clone> FixedSizeVec<T> {
         let v_2 = vec![6, 7, 8, 9, 10, 11, 12]; 
         fs_v.extend(v_2);
         assert_eq!(fs_v.as_mut_slice(), vec![8, 9, 10, 11, 12]);
+      }
+
+      #[test]
+      fn test_extension_with_multiple_overflow() {
+        let v = vec![1, 2, 3, 4, 5];
+        let mut fs_v = FixedSizeVec::with_vec(5, &v);
+        let v_2 = vec![6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]; 
+        fs_v.extend(v_2);
+        assert_eq!(fs_v.as_mut_slice(), vec![12, 13, 14, 15, 16]);
       }
   }
