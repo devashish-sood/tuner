@@ -4,8 +4,8 @@ pub struct FixedSizeVec<T: Clone> {
   buf: Vec<T>, 
   size: usize,
 }
-
 // Fixed size vector that pushes out old data on append
+#[allow(dead_code)]
 impl<T: Clone> FixedSizeVec<T> {
 
   pub fn new(size: usize) -> Self {

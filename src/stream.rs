@@ -19,9 +19,8 @@ pub fn build_stream() -> cpal::Stream {
         .build_input_stream(
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                acc.extend(data.to_vec()); // Look up, how  could I just have used the slice here instead of having to convert to vec. why did i have to convert to vec in the first place? 
+                acc.extend(data); 
                 if acc.full() {
-                    let t = acc.as_slice();
                     apply_fft(acc.as_slice());
                 }
             },
