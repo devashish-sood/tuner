@@ -1,33 +1,42 @@
+use std::sync::{Arc, RwLock};
 use cpal::{
-    traits::{DeviceTrait, HostTrait},
-    StreamConfig,
+    traits::{DeviceTrait, HostTrait}, Device, StreamConfig
 };
 
-use crate::{detection::apply_fft, fsvec::FixedSizeVec};
+use crate::fsvec::FixedSizeVec;
 
-pub fn build_stream() -> cpal::Stream {
-    let host = cpal::default_host();
-    let my_dev = host
-        .default_input_device()
-        .expect("no default input device found");
-    let config: StreamConfig = StreamConfig::from(my_dev
-        .default_input_config()
-        .expect("No default input config"));
-    let sample_rate = config.sample_rate.0 as f32;
-    let mut acc= FixedSizeVec::<f32>::new(sample_rate as usize);
-    let stream = my_dev
+pub fn build_stream(buf: Arc<RwLock<FixedSizeVec<f32>>>, device: Device, config: StreamConfig) -> cpal::Stream {
+    device
         .build_input_stream(
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                acc.extend(data); 
-                if acc.full() {
-                    apply_fft(acc.as_slice());
+                let buffer = buf.write();
+                match buffer {
+                    Ok(mut buffer) => {
+                        buffer.extend(data);
+                    }
+                    Err(_) => {
+                    }
+                }
+                if let Ok(mut buffer) = buf.write() {
+                    buffer.extend(data);
                 }
             },
             move |err| print!("error: {}", err),
             None,
         )
-        .expect("Could not build stream");
+        .expect("Could not build stream")
+}
 
-    stream
+pub fn get_device() -> Device {
+    cpal::default_host()
+    .default_input_device()
+    .expect("No default input device found")
+}
+
+pub fn get_config(device:&Device) -> StreamConfig {
+    device
+    .default_input_config()
+    .expect("No default input config found")
+    .into()
 }
