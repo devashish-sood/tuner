@@ -27,6 +27,7 @@ fn main() {
     let mut detector = YINDetector::<f32>::new(BUF_SIZE, BUF_SIZE / 2);
     let stream: cpal::Stream = stream::build_stream(buf.clone(), device, config);
     stream.play().expect("Stream couldn't play");
+    println!("Ready to tune");
     loop {
         let buffer = buf.read();
         match buffer {
